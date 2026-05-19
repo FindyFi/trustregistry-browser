@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trust Registry Browser</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      /* Findynet brand palette */
+      --cyan:        #4ffaff;
+      --blue:        #0082ff;
+      --indigo:      #0a00be;
+      --navy:        #0d0342;
+      --peach:       #ffebd2;
+
+      /* UI roles */
+      --primary:     var(--blue);
+      --primary-dark:var(--indigo);
+      --accent:      var(--cyan);
+      --bg:          #f0f4ff;
+      --card:        #ffffff;
+      --border:      #dde5f7;
+      --text:        var(--navy);
+      --muted:       #5a6a9a;
+      --r:           10px;
+      --shadow:      0 1px 4px rgba(10,0,190,.07), 0 1px 2px rgba(10,0,190,.04);
+      --shadow-hover:0 6px 24px rgba(10,0,190,.14);
+    }
+
+    body {
+      font-family: 'Nunito', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    /* ── Loading bar ────────────────────────────────────── */
+    #loading-bar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--cyan), var(--blue), var(--cyan));
+      background-size: 200% 100%;
+      z-index: 200;
+      animation: lbar 1.2s linear infinite;
+    }
+    @keyframes lbar { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+
+    /* ── Header ─────────────────────────────────────────── */
+    header {
+      background: var(--navy);
+      color: white;
+      padding: 0 24px;
+      box-shadow: 0 2px 16px rgba(10,0,62,.35);
+      position: relative;
+      overflow: hidden;
+    }
+    header::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(16deg, var(--indigo) 0%, var(--navy) 60%);
+      opacity: .85;
+    }
+    header::after {
+      content: '';
+      position: absolute;
+      top: -60px; right: -40px;
+      width: 320px; height: 320px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(79,250,255,.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .header-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+      padding: 14px 0;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── Logo ─────────────────────────────────────────── */
+    .logo-icon {
+      width: 160px;
+    }
+
+    .header-divider {
+      width: 1px;
+      height: 28px;
+      background: rgba(255,255,255,.18);
+      flex-shrink: 0;
+    }
+    .header-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: rgba(255,255,255,.65);
+      white-space: nowrap;
+      letter-spacing: .02em;
+      text-transform: uppercase;
+    }
+
+    .search-bar { flex: 1; display: flex; gap: 8px; min-width: 260px; }
+    .search-bar input {
+      flex: 1;
+      padding: 9px 14px;
+      border: 1.5px solid rgba(79,250,255,.25);
+      border-radius: var(--r);
+      background: rgba(255,255,255,.08);
+      color: white;
+      font-size: 14px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 400;
+      outline: none;
+      transition: border-color .2s, background .2s;
+    }
+    .search-bar input::placeholder { color: rgba(255,255,255,.4); font-family: 'Nunito', sans-serif; }
+    .search-bar input:focus { border-color: var(--cyan); background: rgba(79,250,255,.07); }
+    .search-bar button {
+      padding: 9px 20px;
+      background: linear-gradient(16deg, var(--indigo), var(--blue));
+      color: white;
+      border: 1.5px solid rgba(79,250,255,.35);
+      border-radius: var(--r);
+      font-weight: 700;
+      font-size: 13px;
+      font-family: 'Nunito', sans-serif;
+      cursor: pointer;
+      transition: all .18s;
+      white-space: nowrap;
+      letter-spacing: .02em;
+    }
+    .search-bar button:hover {
+      background: linear-gradient(16deg, var(--blue), var(--cyan));
+      border-color: var(--cyan);
+      color: var(--navy);
+      box-shadow: 0 0 16px rgba(79,250,255,.3);
+    }
+
+    /* ── Breadcrumb ─────────────────────────────────────── */
+    #breadcrumb {
+      background: white;
+      border-bottom: 1px solid var(--border);
+      padding: 9px 24px;
+    }
+    .bc-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 4px;
+      font-size: 13px;
+    }
+    .crumb { color: var(--primary); cursor: pointer; font-weight: 600; }
+    .crumb:hover { text-decoration: underline; }
+    .crumb.now { color: var(--muted); cursor: default; font-weight: 500; }
+    .crumb.now:hover { text-decoration: none; }
+    .sep { color: var(--border); font-size: 15px; }
+
+    /* ── Main ───────────────────────────────────────────── */
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 22px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    /* ── Generic section ────────────────────────────────── */
+    .section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+    .sec-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 13px 20px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(135deg, #f8faff 0%, #eef2ff 100%);
+    }
+    .sec-head h2 { font-size: 13px; font-weight: 700; color: var(--navy); text-transform: uppercase; letter-spacing: .06em; }
+    .count { color: var(--muted); font-weight: 500; }
+
+    /* ── Badges ─────────────────────────────────────────── */
+    .badges { display: flex; gap: 5px; flex-wrap: wrap; }
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 700;
+      color: white;
+      letter-spacing: .02em;
+    }
+    .badge.sm { font-size: 10px; padding: 2px 7px; }
+
+    /* ── Error / empty ──────────────────────────────────── */
+    #error-msg {
+      background: #fff1f2;
+      border: 1px solid #fecdd3;
+      border-radius: var(--r);
+      padding: 13px 18px;
+      color: #be123c;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .empty { color: var(--muted); padding: 18px 20px; font-size: 13px; }
+    .error-text { color: #be123c; font-size: 12px; font-weight: 600; }
+
+    /* ── Authority cards ────────────────────────────────── */
+    .auth-grid { display: flex; flex-wrap: wrap; gap: 12px; padding: 16px; }
+    .auth-card {
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      cursor: pointer;
+      text-align: left;
+      background: #f8faff;
+      font-family: 'Nunito', sans-serif;
+      transition: all .18s;
+      min-width: 200px;
+    }
+    .auth-card:hover {
+      border-color: var(--blue);
+      box-shadow: var(--shadow-hover);
+      background: #eef4ff;
+      transform: translateY(-1px);
+    }
+    .card-label {
+      font-size: 10px;
+      font-weight: 800;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-bottom: 5px;
+    }
+    .card-title { font-weight: 700; font-size: 14px; margin-bottom: 4px; color: var(--navy); }
+    .card-id { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; word-break: break-all; margin-bottom: 6px; }
+    .card-contact { font-size: 12px; color: var(--muted); }
+    .card-link { font-size: 12px; }
+    .card-link a { color: var(--primary); font-weight: 600; }
+    .card-logo { width: 36px; height: 36px; object-fit: contain; border-radius: 6px; margin-bottom: 6px; }
+
+    /* ── Entity section ─────────────────────────────────── */
+    .ent-head { padding: 20px 22px 14px; border-bottom: 1px solid var(--border); }
+    .ent-head h2 { font-size: 22px; font-weight: 800; margin-bottom: 4px; color: var(--navy); letter-spacing: -.3px; }
+    .ent-url { font-size: 12px; font-family: 'JetBrains Mono', monospace; color: var(--muted); word-break: break-all; margin-bottom: 10px; }
+
+    /* ── Tabs ───────────────────────────────────────────── */
+    .tab-bar {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      padding: 0 20px;
+      gap: 0;
+      background: #fbfcff;
+    }
+    .tab-btn {
+      padding: 11px 15px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      border-bottom: 2.5px solid transparent;
+      margin-bottom: -1px;
+      transition: all .15s;
+      white-space: nowrap;
+      font-family: 'Nunito', sans-serif;
+      letter-spacing: .01em;
+    }
+    .tab-btn:hover { color: var(--primary); }
+    .tab-btn.active { color: var(--indigo); border-bottom-color: var(--indigo); font-weight: 700; }
+    .tab-content { padding: 20px; }
+
+    /* ── Meta table ─────────────────────────────────────── */
+    .meta-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .meta-table th {
+      text-align: left;
+      padding: 8px 16px 8px 0;
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      width: 220px;
+      min-width: 130px;
+      vertical-align: top;
+      white-space: nowrap;
+    }
+    .meta-table td { padding: 8px 0; word-break: break-word; vertical-align: top; }
+    .meta-table tr:not(:last-child) td,
+    .meta-table tr:not(:last-child) th { border-bottom: 1px solid var(--border); }
+
+    /* ── Value styles ───────────────────────────────────── */
+    .v-null { color: var(--muted); }
+    .v-bool { color: var(--blue); font-weight: 700; }
+    .v-num  { color: var(--indigo); font-weight: 600; }
+    .tag {
+      display: inline-block;
+      background: #eef2ff;
+      border: 1px solid #c7d2fe;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 11px;
+      margin: 1px 2px 1px 0;
+      color: var(--indigo);
+      font-weight: 600;
+    }
+
+    /* ── Tree ───────────────────────────────────────────── */
+    .tree-node { margin: 1px 0; }
+    .tree-sum {
+      display: flex; align-items: baseline; gap: 4px;
+      cursor: pointer; padding: 2px 0; -webkit-user-select: none; user-select: none; list-style: none;
+    }
+    .tree-sum::-webkit-details-marker { display: none; }
+    .tree-caret { color: var(--muted); font-size: 9px; width: 10px; display: inline-block; transition: transform .15s; flex-shrink: 0; }
+    details[open] > .tree-sum > .tree-caret { transform: rotate(90deg); }
+    .tree-key { font-weight: 700; color: var(--indigo); font-size: 12px; font-family: 'JetBrains Mono', monospace; }
+    .tree-preview { color: var(--muted); font-size: 11px; }
+    .tree-body { margin-left: 6px; padding-left: 8px; border-left: 2px solid var(--border); margin-top: 1px; margin-bottom: 2px; }
+    .tree-leaf { display: flex; align-items: baseline; gap: 4px; padding: 2px 0; font-size: 13px; }
+    .tree-sep { color: var(--muted); flex-shrink: 0; }
+    .tree-val { word-break: break-word; }
+
+    /* ── Raw JSON ───────────────────────────────────────── */
+    .raw-json {
+      font-size: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      background: var(--navy);
+      color: #c7d2fe;
+      padding: 18px;
+      border-radius: 10px;
+      overflow-x: auto;
+      white-space: pre;
+      line-height: 1.7;
+    }
+
+    /* ── Keys ───────────────────────────────────────────── */
+    .key-card {
+      background: #f8faff;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+    }
+    .key-head { display: flex; gap: 6px; margin-bottom: 7px; }
+    .key-kty, .key-use, .key-alg {
+      padding: 2px 9px;
+      border-radius: 5px;
+      font-size: 11px;
+      font-weight: 700;
+      background: #e0e7ff;
+      color: var(--indigo);
+      letter-spacing: .03em;
+    }
+    .key-field { font-size: 12px; color: var(--muted); margin-top: 3px; font-weight: 500; }
+    .key-field code { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--indigo); }
+    .key-material { word-break: break-all; font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+
+    /* ── View toggle ────────────────────────────────────── */
+    .view-toggle { display: flex; gap: 4px; }
+    .view-btn {
+      padding: 5px 11px;
+      border: 1.5px solid var(--border);
+      border-radius: 7px;
+      background: white;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      font-family: 'Nunito', sans-serif;
+      transition: all .15s;
+    }
+    .view-btn.active { background: var(--indigo); border-color: var(--indigo); color: white; }
+    .view-btn:not(.active):hover { border-color: var(--blue); color: var(--blue); }
+
+    /* ── Subordinate cards ──────────────────────────────── */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 12px;
+      padding: 16px;
+    }
+    .sub-card {
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      background: var(--card);
+      transition: all .18s;
+      cursor: pointer;
+      text-align: left;
+    }
+    .sub-card:hover {
+      border-color: var(--blue);
+      box-shadow: var(--shadow-hover);
+      background: #f0f5ff;
+      transform: translateY(-1px);
+    }
+
+    /* ── Subordinate list ───────────────────────────────── */
+    .sub-list { display: flex; flex-direction: column; }
+    .list-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 11px 20px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background .12s;
+    }
+    .list-item:last-child { border-bottom: none; }
+    .list-item:hover { background: #eef4ff; }
+    .list-row1 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .list-row2 { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .list-name { font-weight: 700; color: var(--navy); }
+    .list-id { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; word-break: break-all; }
+    .list-meta { font-size: 12px; color: var(--muted); }
+    .list-url { font-size: 12px; color: var(--primary); text-decoration: none; font-weight: 600; }
+    .list-url:hover { text-decoration: underline; }
+
+    /* ── Subordinate table ──────────────────────────────── */
+    .tbl-wrap { overflow-x: auto; }
+    .sub-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .sub-table th {
+      text-align: left;
+      padding: 11px 16px;
+      background: linear-gradient(135deg, #f8faff 0%, #eef2ff 100%);
+      border-bottom: 1px solid var(--border);
+      font-weight: 700;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .sub-table td { padding: 9px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .sub-table tr:last-child td { border-bottom: none; }
+    .sub-table tr.nav-row { cursor: pointer; }
+    .sub-table tr.nav-row:hover td { background: #eef4ff; }
+    .entity-link { color: var(--primary); text-decoration: none; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 500; }
+    .entity-link:hover { text-decoration: underline; }
+    .td-contacts { font-size: 12px; color: var(--muted); max-width: 200px; word-break: break-word; }
+
+    /* ── Skeleton ───────────────────────────────────────── */
+    .skel {
+      height: 12px;
+      border-radius: 6px;
+      background: linear-gradient(90deg, #e0e7ff 25%, #f0f4ff 50%, #e0e7ff 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+      margin-bottom: 8px;
+    }
+    .skel.short { width: 55%; }
+    .skel.xs { width: 35%; height: 10px; }
+    @keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+    .loading-card { background: #f8faff; border: 1.5px solid var(--border); border-radius: 12px; padding: 14px; }
+    .sub-loading { padding: 18px 20px; color: var(--muted); font-size: 13px; font-weight: 500; }
+
+    /* ── Responsive ─────────────────────────────────────── */
+    @media (max-width: 640px) {
+      main { padding: 12px; }
+      .header-inner { flex-direction: column; align-items: stretch; }
+      .card-grid { grid-template-columns: 1fr; }
+      .meta-table th { width: 120px; min-width: 100px; }
+    }
+
+    a { color: var(--primary); font-weight: 600; }
+    .nav-link { cursor: pointer; }
+  </style>
+</head>
+<body>
+
+<div id="loading-bar" hidden></div>
+
+<header>
+  <div class="header-inner">
+    <a class="logo" href="/">
+      <img src="https://findynet.fi/findynet-logo-white" alt="Findynet" class="logo-icon">
+    </a>
+    <div class="header-divider"></div>
+    <span class="header-title">Trust Registry Browser</span>
+    <div class="search-bar">
+      <input id="entity-input" type="url" placeholder="Enter entity identifier…"
+             autocomplete="off" spellcheck="false">
+      <button id="browse-btn">Browse</button>
+    </div>
+  </div>
+</header>
+
+<nav id="breadcrumb" hidden>
+  <div id="bc-inner" class="bc-inner"></div>
+</nav>
+
+<main>
+  <div id="error-msg" hidden></div>
+
+  <!-- Authorities -->
+  <section id="auth-sec" class="section" hidden>
+    <div class="sec-head"><h2>Authorities</h2></div>
+    <div id="auth-list" class="auth-grid"></div>
+  </section>
+
+  <!-- Current entity -->
+  <section id="ent-sec" class="section" hidden>
+    <div class="ent-head">
+      <h2 id="ent-name"></h2>
+      <div id="ent-url" class="ent-url"></div>
+      <div id="ent-badges" class="badges"></div>
+    </div>
+    <div id="tab-bar" class="tab-bar"></div>
+    <div id="tab-content" class="tab-content"></div>
+  </section>
+
+  <!-- Subordinates -->
+  <section id="sub-sec" class="section" hidden>
+    <div class="sec-head">
+      <h2>Subordinates <span id="sub-count" class="count"></span></h2>
+      <div class="view-toggle">
+        <button class="view-btn active" data-view="cards">Cards</button>
+        <button class="view-btn" data-view="list">List</button>
+        <button class="view-btn" data-view="table">Table</button>
+      </div>
+    </div>
+    <div id="sub-container"></div>
+  </section>
+</main>
+
+<script type="module">
+// ── Constants ────────────────────────────────────────────────────────────────
+
+const FALLBACK_ID = 'https://findy.trustregistry.eu/';
+
+const COLORS = {
+  federation_entity:         '#0082ff',
+  openid_provider:           '#059669',
+  openid_relying_party:      '#d97706',
+  oauth_authorization_server:'#0a00be',
+  oauth_client:              '#db2777',
+  oauth_resource:            '#0891b2',
+  wallet_provider:           '#65a30d',
+};
+
+const TAB_LABELS = {
+  general:                   'General',
+  keys:                      'Keys',
+  raw:                       'Raw JSON',
+  federation_entity:         'Federation',
+  openid_provider:           'OpenID Provider',
+  openid_relying_party:      'Relying Party',
+  oauth_authorization_server:'Auth Server',
+  oauth_client:              'OAuth Client',
+  oauth_resource:            'Resource',
+  wallet_provider:           'Wallet Provider',
+};
+
+const BATCH = 6;
+
+// ── State ────────────────────────────────────────────────────────────────────
+
+const s = {
+  id:       null,
+  cfg:      null,
+  stack:    [],
+  subIds:   null,
+  subCfgs:  {},
+  authCfgs: {},
+  view:     'cards',
+  tab:      'general',
+  loading:  false,
+  error:    null,
+};
+
+let gen = 0;
+let _histPop = false;
+
+// ── Utilities ────────────────────────────────────────────────────────────────
+
+function decodeJWT(token) {
+  const b64 = token.trim().split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+  const pad = (4 - b64.length % 4) % 4;
+  return JSON.parse(atob(b64 + '='.repeat(pad)));
+}
+
+function fmtTs(ts) {
+  if (!ts) return '—';
+  return new Date(ts * 1000).toLocaleString();
+}
+
+function host(url) {
+  try { return new URL(url).hostname; } catch { return url; }
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function orgName(cfg) {
+  const md = cfg?.metadata || {};
+  for (const t of ['federation_entity','openid_provider','openid_relying_party','oauth_authorization_server']) {
+    if (md[t]?.organization_name) return md[t].organization_name;
+  }
+  return host(cfg?.sub || cfg?.iss || '');
+}
+
+function types(cfg) { return Object.keys(cfg?.metadata || {}); }
+
+function fedMeta(cfg) { return cfg?.metadata?.federation_entity || {}; }
+
+function isIntermediary(cfg) { return !!fedMeta(cfg)?.federation_list_endpoint; }
+
+// ── Fetch ────────────────────────────────────────────────────────────────────
+
+async function getEntityCfg(id) {
+  const url = id.replace(/\/+$/, '') + '/.well-known/openid-federation';
+  let res;
+  try { res = await fetch(url); }
+  catch (e) { throw new Error(`Network error (possible CORS restriction): ${e.message}`); }
+  if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
+  try { return decodeJWT(await res.text()); }
+  catch { throw new Error(`Expected JWT from ${url} but got unexpected response`); }
+}
+
+async function getList(endpoint) {
+  let res;
+  try { res = await fetch(endpoint); }
+  catch (e) { throw new Error(e.message); }
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
+// ── Navigation ───────────────────────────────────────────────────────────────
+
+async function navigate(id) {
+  if (s.id && s.cfg) {
+    s.stack.push({ id: s.id, label: orgName(s.cfg) });
+  }
+  await load(id);
+}
+
+async function navBack(idx) {
+  const item = s.stack[idx];
+  s.stack = s.stack.slice(0, idx);
+  await load(item.id);
+}
+
+async function load(id) {
+  id = id.trim().replace(/\/+$/, '');
+  if (!id) return;
+
+  const myGen = ++gen;
+
+  s.loading = true;
+  s.error   = null;
+  s.id      = id;
+  s.cfg     = null;
+  s.subIds  = null;
+  s.subCfgs = {};
+  s.authCfgs= {};
+  s.tab     = 'general';
+
+  document.getElementById('entity-input').value = id;
+  document.title = `OpenID Federation Browser – ${host(id)}`;
+  if (_histPop) { _histPop = false; }
+  else { history.pushState({ id }, '', `?entity=${encodeURIComponent(id)}`); }
+  window.scrollTo(0, 0);
+  render();
+
+  try {
+    s.cfg = await getEntityCfg(id);
+  } catch (e) {
+    if (myGen !== gen) return;
+    s.error   = e.message;
+    s.loading = false;
+    render();
+    return;
+  }
+  if (myGen !== gen) return;
+
+  s.loading = false;
+  render();
+
+  const hints = s.cfg.authority_hints || [];
+  if (hints.length) {
+    hints.forEach(h => { s.authCfgs[h] = 'loading'; });
+    renderAuthorities();
+    loadAuthorities(hints, myGen);
+  }
+
+  const listEp = fedMeta(s.cfg)?.federation_list_endpoint;
+  if (listEp) {
+    loadSubList(listEp, myGen);
+  } else {
+    s.subIds = [];
+    renderSubordinates();
+  }
+}
+
+async function loadAuthorities(ids, myGen) {
+  await Promise.all(ids.map(async id => {
+    try {
+      const cfg = await getEntityCfg(id);
+      if (myGen !== gen) return;
+      s.authCfgs[id] = cfg;
+    } catch {
+      if (myGen !== gen) return;
+      s.authCfgs[id] = null;
+    }
+    renderAuthorities();
+  }));
+}
+
+async function loadSubList(endpoint, myGen) {
+  try {
+    s.subIds = await getList(endpoint);
+  } catch {
+    if (myGen !== gen) return;
+    s.subIds = [];
+  }
+  if (myGen !== gen) return;
+  renderSubordinates();
+  loadSubCfgs(myGen);
+}
+
+async function loadSubCfgs(myGen) {
+  const ids = s.subIds || [];
+  const todo = ids.filter(id => !s.subCfgs[id]);
+  if (!todo.length) return;
+
+  todo.forEach(id => { s.subCfgs[id] = 'loading'; });
+
+  for (let i = 0; i < todo.length; i += BATCH) {
+    if (myGen !== gen) return;
+    const batch = todo.slice(i, i + BATCH);
+    await Promise.all(batch.map(async id => {
+      try {
+        const cfg = await getEntityCfg(id);
+        if (myGen !== gen) return;
+        s.subCfgs[id] = cfg;
+      } catch {
+        if (myGen !== gen) return;
+        s.subCfgs[id] = 'error';
+      }
+    }));
+    if (myGen !== gen) return;
+    renderSubordinates();
+  }
+}
+
+// ── Render ───────────────────────────────────────────────────────────────────
+
+function render() {
+  document.getElementById('loading-bar').hidden = !s.loading;
+
+  const errEl = document.getElementById('error-msg');
+  if (s.error) { errEl.textContent = s.error; errEl.hidden = false; }
+  else errEl.hidden = true;
+
+  renderBreadcrumb();
+  renderEntity();
+  renderAuthorities();
+  renderSubordinates();
+}
+
+function renderBreadcrumb() {
+  const nav = document.getElementById('breadcrumb');
+  if (!s.stack.length) { nav.hidden = true; return; }
+  nav.hidden = false;
+  const inner = document.getElementById('bc-inner');
+  inner.innerHTML =
+    s.stack.map((item, i) =>
+      `<a class="crumb" data-back="${i}">${esc(item.label)}</a><span class="sep"> › </span>`
+    ).join('') +
+    `<span class="crumb now">${esc(s.cfg ? orgName(s.cfg) : host(s.id || ''))}</span>`;
+}
+
+function renderEntity() {
+  const sec = document.getElementById('ent-sec');
+  if (!s.cfg) { sec.hidden = true; return; }
+  sec.hidden = false;
+
+  document.getElementById('ent-name').textContent = orgName(s.cfg);
+  document.getElementById('ent-url').textContent  = s.cfg.sub || s.cfg.iss || s.id;
+
+  document.getElementById('ent-badges').innerHTML =
+    types(s.cfg).map(t =>
+      `<span class="badge" style="background:${COLORS[t]||'#6b7280'}">${esc(t.replace(/_/g,' '))}</span>`
+    ).join('');
+
+  const tabs = ['general', ...types(s.cfg), 'keys', 'raw'];
+  document.getElementById('tab-bar').innerHTML = tabs.map(t =>
+    `<button class="tab-btn${s.tab===t?' active':''}" data-tab="${t}">${esc(TAB_LABELS[t]||t)}</button>`
+  ).join('');
+
+  renderTabContent();
+}
+
+function renderTabContent() {
+  const cfg = s.cfg;
+  if (!cfg) return;
+  const el = document.getElementById('tab-content');
+
+  if (s.tab === 'general') { el.innerHTML = renderGeneral(cfg); return; }
+  if (s.tab === 'keys')    { el.innerHTML = renderKeys(cfg);    return; }
+  if (s.tab === 'raw') {
+    el.innerHTML = `<pre class="raw-json">${esc(JSON.stringify(cfg, null, 2))}</pre>`;
+    return;
+  }
+  const meta = cfg.metadata?.[s.tab];
+  el.innerHTML = meta
+    ? renderVal(meta)
+    : '<p class="empty">No data</p>';
+}
+
+function renderGeneral(cfg) {
+  const rows = [
+    ['Entity ID', `<a href="${esc(cfg.sub)}" target="_blank">${esc(cfg.sub)}</a>`],
+  ];
+  if (cfg.iss && cfg.iss !== cfg.sub)
+    rows.push(['Issuer', `<a href="${esc(cfg.iss)}" target="_blank">${esc(cfg.iss)}</a>`]);
+  rows.push(
+    ['Issued At', esc(fmtTs(cfg.iat))],
+    ['Expires',   esc(fmtTs(cfg.exp))],
+  );
+  if (cfg.authority_hints?.length) {
+    rows.push(['Authority Hints', cfg.authority_hints.map(h =>
+      `<a class="nav-link" data-id="${esc(h)}">${esc(h)}</a>`
+    ).join('<br>')]);
+  }
+  return `<table class="meta-table"><tbody>${
+    rows.map(([k,v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('')
+  }</tbody></table>`;
+}
+
+function renderKeys(cfg) {
+  const keys = cfg.jwks?.keys || [];
+  if (!keys.length) return '<p class="empty">No keys</p>';
+  return keys.map(k => `
+    <div class="key-card">
+      <div class="key-head">
+        ${k.kty ? `<span class="key-kty">${esc(k.kty)}</span>` : ''}
+        ${k.use ? `<span class="key-use">${esc(k.use)}</span>` : ''}
+        ${k.alg ? `<span class="key-alg">${esc(k.alg)}</span>` : ''}
+      </div>
+      ${k.kid ? `<div class="key-field">kid: <code>${esc(k.kid)}</code></div>` : ''}
+      ${k.x5t ? `<div class="key-field">x5t: <code>${esc(k.x5t)}</code></div>` : ''}
+      ${k.n   ? `<div class="key-field key-material">n: ${esc(k.n.slice(0,72))}…</div>` : ''}
+      ${k.x   ? `<div class="key-field key-material">x: ${esc(k.x.slice(0,72))}…</div>` : ''}
+      ${k.crv ? `<div class="key-field">crv: <code>${esc(k.crv)}</code></div>` : ''}
+    </div>`).join('');
+}
+
+function renderVal(v, depth = 0) {
+  if (v === null || v === undefined) return '<span class="v-null">—</span>';
+  if (typeof v === 'boolean') return `<span class="v-bool">${v}</span>`;
+  if (typeof v === 'number')  return `<span class="v-num">${v}</span>`;
+  if (typeof v === 'string') {
+    const e = esc(v);
+    return v.startsWith('http') ? `<a href="${e}" target="_blank" rel="noopener">${e}</a>` : e;
+  }
+  if (Array.isArray(v)) {
+    if (!v.length) return '<span class="v-null">[]</span>';
+    if (v.every(i => typeof i !== 'object' || i === null))
+      return v.map(i => `<span class="tag">${esc(String(i))}</span>`).join(' ');
+    return v.map((item, i) => renderTreeNode(`[${i}]`, item, depth)).join('');
+  }
+  if (typeof v === 'object') {
+    if (depth === 0) {
+      return `<table class="meta-table"><tbody>${
+        Object.entries(v).map(([k, val]) =>
+          `<tr><th>${esc(k)}</th><td>${renderVal(val, 1)}</td></tr>`
+        ).join('')
+      }</tbody></table>`;
+    }
+    return Object.entries(v).map(([k, val]) => renderTreeNode(k, val, depth)).join('');
+  }
+  return esc(String(v));
+}
+
+function renderTreeNode(key, val, depth) {
+  const isComplex = val !== null && typeof val === 'object' &&
+    !(Array.isArray(val) && val.every(i => typeof i !== 'object' || i === null));
+  if (isComplex) {
+    const preview = Array.isArray(val) ? `[${val.length}]` : `{${Object.keys(val).length}}`;
+    return `<details class="tree-node">
+      <summary class="tree-sum">
+        <span class="tree-caret">▶</span><span class="tree-key">${esc(String(key))}</span> <span class="tree-preview">${preview}</span>
+      </summary>
+      <div class="tree-body">${renderVal(val, depth + 1)}</div>
+    </details>`;
+  }
+  return `<div class="tree-leaf">
+    <span class="tree-caret" style="visibility:hidden">▶</span>
+    <span class="tree-key">${esc(String(key))}</span><span class="tree-sep">:</span>
+    <span class="tree-val">${renderVal(val, depth + 1)}</span>
+  </div>`;
+}
+
+function renderAuthorities() {
+  const sec = document.getElementById('auth-sec');
+  const hints = s.cfg?.authority_hints || [];
+  if (!hints.length) { sec.hidden = true; return; }
+  sec.hidden = false;
+
+  document.getElementById('auth-list').innerHTML = hints.map(id => {
+    const cfg = s.authCfgs[id];
+    if (cfg === 'loading' || cfg === undefined) {
+      return `<div class="auth-card loading-card" style="min-width:200px;cursor:default">
+        <div class="card-label">Authority</div>
+        <div class="skel"></div><div class="skel short"></div>
+      </div>`;
+    }
+    if (!cfg) {
+      return `<div class="auth-card" style="cursor:default">
+        <div class="card-label">Authority</div>
+        <div class="card-id">${esc(id)}</div>
+        <div class="error-text">Could not load</div>
+      </div>`;
+    }
+    return `<button class="auth-card" data-nav="${esc(cfg.sub || id)}">
+      <div class="card-label">↑ Authority</div>
+      <div class="card-title">${esc(orgName(cfg))}</div>
+      <div class="card-id">${esc(cfg.sub || id)}</div>
+      <div class="badges">${types(cfg).map(t =>
+        `<span class="badge sm" style="background:${COLORS[t]||'#6b7280'}">${esc(t.replace(/_/g,' '))}</span>`
+      ).join('')}</div>
+    </button>`;
+  }).join('');
+}
+
+function renderSubordinates() {
+  const sec = document.getElementById('sub-sec');
+  if (!s.cfg) { sec.hidden = true; return; }
+  if (!fedMeta(s.cfg)?.federation_list_endpoint) { sec.hidden = true; return; }
+  sec.hidden = false;
+
+  document.getElementById('sub-count').textContent =
+    s.subIds != null ? `(${s.subIds.length})` : '';
+
+  const con = document.getElementById('sub-container');
+
+  if (s.subIds == null) {
+    con.innerHTML = '<p class="sub-loading">Loading subordinates…</p>';
+    return;
+  }
+  if (!s.subIds.length) {
+    con.innerHTML = '<p class="empty">No subordinates found</p>';
+    return;
+  }
+
+  if (s.view === 'cards') con.innerHTML = renderSubCards();
+  else if (s.view === 'list') con.innerHTML = renderSubList();
+  else con.innerHTML = renderSubTable();
+}
+
+function renderSubCards() {
+  return `<div class="card-grid">${s.subIds.map(id => {
+    const cfg = s.subCfgs[id];
+    if (!cfg || cfg === 'loading') return `<div class="sub-card loading-card" style="cursor:default">
+      <div class="skel"></div><div class="skel short"></div><div class="skel xs"></div>
+    </div>`;
+    if (cfg === 'error') return `<div class="sub-card" data-nav="${esc(id)}">
+      <div class="card-title">${esc(host(id))}</div>
+      <div class="card-id">${esc(id)}</div>
+      <div class="error-text">Failed to load — click to retry</div>
+    </div>`;
+    const fm = fedMeta(cfg);
+    return `<div class="sub-card" data-nav="${esc(cfg.sub||id)}">
+      ${fm.logo_uri ? `<img class="card-logo" src="${esc(fm.logo_uri)}" alt="" onerror="this.style.display='none'">` : ''}
+      <div class="card-title">${esc(orgName(cfg))}</div>
+      <div class="card-id">${esc(id)}</div>
+      <div class="badges">${types(cfg).map(t =>
+        `<span class="badge sm" style="background:${COLORS[t]||'#6b7280'}">${esc(t.replace(/_/g,' '))}</span>`
+      ).join('')}</div>
+      ${fm.contacts?.length ? `<div class="card-contact">${esc(fm.contacts[0])}</div>` : ''}
+      ${fm.homepage_uri ? `<div class="card-link"><a href="${esc(fm.homepage_uri)}" target="_blank" onclick="event.stopPropagation()">${esc(fm.homepage_uri)}</a></div>` : ''}
+      ${fm.description ? `<div class="card-contact">${esc(fm.description)}</div>` : ''}
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function renderSubList() {
+  return `<div class="sub-list">${s.subIds.map(id => {
+    const cfg = s.subCfgs[id];
+    if (!cfg || cfg === 'loading') return `<div class="list-item" style="cursor:default;pointer-events:none">
+      <div class="skel" style="width:280px;margin:0"></div>
+    </div>`;
+    if (cfg === 'error') return `<div class="list-item" data-nav="${esc(id)}">
+      <div class="list-row1"><span class="list-name">${esc(host(id))}</span></div>
+      <div class="list-row2"><span class="list-id">${esc(id)}</span></div>
+    </div>`;
+    const fm = fedMeta(cfg);
+    return `<div class="list-item" data-nav="${esc(cfg.sub||id)}">
+      <div class="list-row1">
+        <span class="list-name">${esc(orgName(cfg))}</span>
+        ${fm.homepage_uri ? `<a class="list-url" href="${esc(fm.homepage_uri)}" target="_blank" onclick="event.stopPropagation()">${esc(fm.homepage_uri)}</a>` : ''}
+        <div class="badges">${types(cfg).map(t =>
+          `<span class="badge sm" style="background:${COLORS[t]||'#6b7280'}">${esc(t.replace(/_/g,' '))}</span>`
+        ).join('')}</div>
+      </div>
+      <div class="list-row2">
+        <span class="list-id">${esc(id)}</span>
+        ${fm.contacts?.length ? `<span class="list-meta">✉ ${esc(fm.contacts[0])}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function renderSubTable() {
+  return `<div class="tbl-wrap"><table class="sub-table">
+    <thead><tr><th>Name</th><th>Types</th><th>URL</th><th>Contacts</th></tr></thead>
+    <tbody>${s.subIds.map(id => {
+      const cfg = s.subCfgs[id];
+      const loaded = cfg && cfg !== 'loading' && cfg !== 'error';
+      const fm = loaded ? fedMeta(cfg) : {};
+      return `<tr class="nav-row" data-nav="${esc(id)}">
+        <td>${loaded ? esc(orgName(cfg)) : `<span class="v-null">${esc(host(id))}</span>`}</td>
+        <td>${loaded ? types(cfg).map(t =>
+          `<span class="badge sm" style="background:${COLORS[t]||'#6b7280'}">${esc(t.replace(/_/g,' '))}</span>`
+        ).join('') : ''}</td>
+        <td>${fm.homepage_uri ? `<a class="entity-link" href="${esc(fm.homepage_uri)}" target="_blank" onclick="event.stopPropagation()">${esc(fm.homepage_uri)}</a>` : ''}</td>
+        <td class="td-contacts">${fm.contacts?.length ? esc(fm.contacts.join(', ')) : ''}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
+}
+
+// ── Events ───────────────────────────────────────────────────────────────────
+
+document.getElementById('browse-btn').addEventListener('click', () => {
+  const id = document.getElementById('entity-input').value.trim();
+  if (id) { s.stack = []; load(id); }
+});
+
+document.getElementById('entity-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('browse-btn').click();
+});
+
+document.addEventListener('click', e => {
+  const tab = e.target.closest('.tab-btn');
+  if (tab) {
+    s.tab = tab.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === tab));
+    renderTabContent();
+    return;
+  }
+
+  const vbtn = e.target.closest('.view-btn');
+  if (vbtn) {
+    s.view = vbtn.dataset.view;
+    document.querySelectorAll('.view-btn').forEach(b => b.classList.toggle('active', b === vbtn));
+    renderSubordinates();
+    return;
+  }
+
+  const nav = e.target.closest('[data-nav]');
+  if (nav && !e.target.closest('a[href]')) { navigate(nav.dataset.nav); return; }
+
+  const back = e.target.closest('[data-back]');
+  if (back) { navBack(parseInt(back.dataset.back)); return; }
+
+  const nl = e.target.closest('.nav-link[data-id]');
+  if (nl) { e.preventDefault(); navigate(nl.dataset.id); return; }
+});
+
+window.addEventListener('popstate', e => {
+  const id = e.state?.id || new URLSearchParams(window.location.search).get('entity');
+  if (!id) return;
+  s.stack = [];
+  _histPop = true;
+  load(id);
+});
+
+// ── Boot ─────────────────────────────────────────────────────────────────────
+
+async function boot() {
+  const qp = new URLSearchParams(window.location.search).get('entity');
+  if (qp) { await load(qp); return; }
+
+  const { origin } = window.location;
+  if (origin && origin !== 'null' && !origin.startsWith('file')) {
+    try {
+      await getEntityCfg(origin);
+      await load(origin);
+      return;
+    } catch { /* not an OpenID Federation entity */ }
+  }
+
+  await load(FALLBACK_ID);
+}
+
+boot();
+</script>
+</body>
+</html>
