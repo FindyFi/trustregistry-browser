@@ -599,7 +599,8 @@ let _histPop = false;
 function decodeJWT(token) {
   const b64 = token.trim().split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
   const pad = (4 - b64.length % 4) % 4;
-  return JSON.parse(atob(b64 + '='.repeat(pad)));
+  const bytes = Uint8Array.from(atob(b64 + '='.repeat(pad)), c => c.charCodeAt(0));
+  return JSON.parse(new TextDecoder().decode(bytes));
 }
 
 function fmtTs(ts) {
@@ -640,6 +641,16 @@ async function getEntityCfg(id) {
   let res;
   try { res = await fetch(url); }
   catch (e) { throw new Error(`Network error (possible CORS restriction): ${e.message}`); }
+  if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
+  try { return decodeJWT(await res.text()); }
+  catch { throw new Error(`Expected JWT from ${url} but got unexpected response`); }
+}
+
+async function getSubordinateStatement(fetchEndpoint, subId) {
+  const url = `${fetchEndpoint}?sub=${encodeURIComponent(subId)}`;
+  let res;
+  try { res = await fetch(url); }
+  catch (e) { throw new Error(`Network error: ${e.message}`); }
   if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
   try { return decodeJWT(await res.text()); }
   catch { throw new Error(`Expected JWT from ${url} but got unexpected response`); }
@@ -748,9 +759,16 @@ async function loadSubList(endpoint, myGen) {
 }
 
 async function loadSubCfgs(myGen) {
+  const fetchEndpoint = fedMeta(s.cfg)?.federation_fetch_endpoint;
   const ids = s.subIds || [];
   const todo = ids.filter(id => !s.subCfgs[id]);
   if (!todo.length) return;
+
+  if (!fetchEndpoint) {
+    todo.forEach(id => { s.subCfgs[id] = 'error'; });
+    renderSubordinates();
+    return;
+  }
 
   todo.forEach(id => { s.subCfgs[id] = 'loading'; });
 
@@ -759,7 +777,7 @@ async function loadSubCfgs(myGen) {
     const batch = todo.slice(i, i + BATCH);
     await Promise.all(batch.map(async id => {
       try {
-        const cfg = await getEntityCfg(id);
+        const cfg = await getSubordinateStatement(fetchEndpoint, id);
         if (myGen !== gen) return;
         s.subCfgs[id] = cfg;
       } catch {
