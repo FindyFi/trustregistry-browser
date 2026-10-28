@@ -580,6 +580,7 @@ const BATCH = 6;
 
 const s = {
   id:       null,
+  superior: null,
   cfg:      null,
   stack:    [],
   subIds:   null,
@@ -593,6 +594,7 @@ const s = {
 
 let gen = 0;
 let _histPop = false;
+const ecCache = {};
 
 // ── Utilities ────────────────────────────────────────────────────────────────
 
@@ -634,16 +636,38 @@ function fedMeta(cfg) { return cfg?.metadata?.federation_entity || {}; }
 
 function isIntermediary(cfg) { return !!fedMeta(cfg)?.federation_list_endpoint; }
 
+function entityHref(id, superior) {
+  let q = `?entity=${encodeURIComponent(id)}`;
+  if (superior) q += `&superior=${encodeURIComponent(superior)}`;
+  return q;
+}
+
+// Subordinate Statements carry no authority_hints; their issuer is the authority.
+function authorities() {
+  return s.cfg?.authority_hints || (s.superior ? [s.superior] : []);
+}
+
 // ── Fetch ────────────────────────────────────────────────────────────────────
 
 async function getEntityCfg(id) {
-  const url = id.replace(/\/+$/, '') + '/.well-known/openid-federation';
+  id = id.replace(/\/+$/, '');
+  if (ecCache[id]) return ecCache[id];
+  const url = id + '/.well-known/openid-federation';
   let res;
   try { res = await fetch(url); }
   catch (e) { throw new Error(`Network error (possible CORS restriction): ${e.message}`); }
   if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
-  try { return decodeJWT(await res.text()); }
+  let cfg;
+  try { cfg = decodeJWT(await res.text()); }
   catch { throw new Error(`Expected JWT from ${url} but got unexpected response`); }
+  return ecCache[id] = cfg;
+}
+
+async function getStatementFromSuperior(superior, id) {
+  const supCfg = await getEntityCfg(superior);
+  const fetchEndpoint = fedMeta(supCfg)?.federation_fetch_endpoint;
+  if (!fetchEndpoint) throw new Error(`Superior ${superior} has no federation_fetch_endpoint`);
+  return getSubordinateStatement(fetchEndpoint, id);
 }
 
 async function getSubordinateStatement(fetchEndpoint, subId) {
@@ -667,28 +691,33 @@ async function getList(endpoint) {
 
 // ── Navigation ───────────────────────────────────────────────────────────────
 
-async function navigate(id) {
+async function navigate(id, superior) {
   if (s.id && s.cfg) {
-    s.stack.push({ id: s.id, label: orgName(s.cfg) });
+    s.stack.push({ id: s.id, superior: s.superior, label: orgName(s.cfg) });
   }
-  await load(id);
+  await load(id, superior);
 }
 
 async function navBack(idx) {
   const item = s.stack[idx];
   s.stack = s.stack.slice(0, idx);
-  await load(item.id);
+  await load(item.id, item.superior);
 }
 
-async function load(id) {
-  id = id.trim().replace(/\/+$/, '');
-  if (!id) return;
+// With a superior, show the superior's Subordinate Statement about the entity
+// instead of the entity's own Entity Configuration (often blocked by CORS).
+async function load(id, superior) {
+  superior = superior?.trim().replace(/\/+$/, '') || null;
+  // The fetch endpoint matches `sub` exactly, so only normalise free-form ids.
+  if (!superior) id = id.trim().replace(/\/+$/, '');
+  if (!id.trim()) return;
 
   const myGen = ++gen;
 
   s.loading = true;
   s.error   = null;
   s.id      = id;
+  s.superior= superior;
   s.cfg     = null;
   s.subIds  = null;
   s.subCfgs = {};
@@ -698,12 +727,12 @@ async function load(id) {
   document.getElementById('entity-input').value = id;
   document.title = `OpenID Federation Browser – ${host(id)}`;
   if (_histPop) { _histPop = false; }
-  else { history.pushState({ id }, '', `?entity=${encodeURIComponent(id)}`); }
+  else { history.pushState({ id, superior }, '', entityHref(id, superior)); }
   window.scrollTo(0, 0);
   render();
 
   try {
-    s.cfg = await getEntityCfg(id);
+    s.cfg = superior ? await getStatementFromSuperior(superior, id) : await getEntityCfg(id);
   } catch (e) {
     if (myGen !== gen) return;
     s.error   = e.message;
@@ -716,7 +745,7 @@ async function load(id) {
   s.loading = false;
   render();
 
-  const hints = s.cfg.authority_hints || [];
+  const hints = authorities();
   if (hints.length) {
     hints.forEach(h => { s.authCfgs[h] = 'loading'; });
     renderAuthorities();
@@ -941,7 +970,7 @@ function renderTreeNode(key, val, depth) {
 
 function renderAuthorities() {
   const sec = document.getElementById('auth-sec');
-  const hints = s.cfg?.authority_hints || [];
+  const hints = authorities();
   if (!hints.length) { sec.hidden = true; return; }
   sec.hidden = false;
 
@@ -1002,13 +1031,13 @@ function renderSubCards() {
     if (!cfg || cfg === 'loading') return `<div class="sub-card loading-card" style="cursor:default">
       <div class="skel"></div><div class="skel short"></div><div class="skel xs"></div>
     </div>`;
-    if (cfg === 'error') return `<div class="sub-card" data-nav="${esc(id)}">
+    if (cfg === 'error') return `<div class="sub-card" data-nav="${esc(id)}" data-superior="${esc(s.id)}">
       <div class="card-title">${esc(host(id))}</div>
       <div class="card-id">${esc(id)}</div>
       <div class="error-text">Failed to load — click to retry</div>
     </div>`;
     const fm = fedMeta(cfg);
-    return `<div class="sub-card" data-nav="${esc(cfg.sub||id)}">
+    return `<div class="sub-card" data-nav="${esc(cfg.sub||id)}" data-superior="${esc(s.id)}">
       ${fm.logo_uri ? `<img class="card-logo" src="${esc(fm.logo_uri)}" alt="" onerror="this.style.display='none'">` : ''}
       <div class="card-title">${esc(orgName(cfg))}</div>
       <div class="card-id">${esc(id)}</div>
@@ -1028,12 +1057,12 @@ function renderSubList() {
     if (!cfg || cfg === 'loading') return `<div class="list-item" style="cursor:default;pointer-events:none">
       <div class="skel" style="width:280px;margin:0"></div>
     </div>`;
-    if (cfg === 'error') return `<div class="list-item" data-nav="${esc(id)}">
+    if (cfg === 'error') return `<div class="list-item" data-nav="${esc(id)}" data-superior="${esc(s.id)}">
       <div class="list-row1"><span class="list-name">${esc(host(id))}</span></div>
       <div class="list-row2"><span class="list-id">${esc(id)}</span></div>
     </div>`;
     const fm = fedMeta(cfg);
-    return `<div class="list-item" data-nav="${esc(cfg.sub||id)}">
+    return `<div class="list-item" data-nav="${esc(cfg.sub||id)}" data-superior="${esc(s.id)}">
       <div class="list-row1">
         <span class="list-name">${esc(orgName(cfg))}</span>
         ${fm.homepage_uri ? `<a class="list-url" href="${esc(fm.homepage_uri)}" target="_blank" onclick="event.stopPropagation()">${esc(fm.homepage_uri)}</a>` : ''}
@@ -1056,7 +1085,7 @@ function renderSubTable() {
       const cfg = s.subCfgs[id];
       const loaded = cfg && cfg !== 'loading' && cfg !== 'error';
       const fm = loaded ? fedMeta(cfg) : {};
-      return `<tr class="nav-row" data-nav="${esc(id)}">
+      return `<tr class="nav-row" data-nav="${esc(id)}" data-superior="${esc(s.id)}">
         <td>${loaded ? esc(orgName(cfg)) : `<span class="v-null">${esc(host(id))}</span>`}</td>
         <td>${loaded ? types(cfg).map(t =>
           `<span class="badge sm" style="background:${COLORS[t]||'#6b7280'}">${esc(t.replace(/_/g,' '))}</span>`
@@ -1097,7 +1126,7 @@ document.addEventListener('click', e => {
   }
 
   const nav = e.target.closest('[data-nav]');
-  if (nav && !e.target.closest('a[href]')) { navigate(nav.dataset.nav); return; }
+  if (nav && !e.target.closest('a[href]')) { navigate(nav.dataset.nav, nav.dataset.superior); return; }
 
   const back = e.target.closest('[data-back]');
   if (back) { navBack(parseInt(back.dataset.back)); return; }
@@ -1107,18 +1136,20 @@ document.addEventListener('click', e => {
 });
 
 window.addEventListener('popstate', e => {
-  const id = e.state?.id || new URLSearchParams(window.location.search).get('entity');
+  const qp = new URLSearchParams(window.location.search);
+  const id = e.state?.id || qp.get('entity');
   if (!id) return;
+  const superior = e.state ? e.state.superior : qp.get('superior');
   s.stack = [];
   _histPop = true;
-  load(id);
+  load(id, superior);
 });
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
 
 async function boot() {
-  const qp = new URLSearchParams(window.location.search).get('entity');
-  if (qp) { await load(qp); return; }
+  const qp = new URLSearchParams(window.location.search);
+  if (qp.get('entity')) { await load(qp.get('entity'), qp.get('superior')); return; }
 
   const { origin } = window.location;
   if (origin && origin !== 'null' && !origin.startsWith('file')) {
