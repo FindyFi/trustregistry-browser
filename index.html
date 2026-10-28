@@ -624,8 +624,12 @@ function esc(s) {
 
 function orgName(cfg) {
   const md = cfg?.metadata || {};
-  for (const t of ['federation_entity','openid_provider','openid_relying_party','oauth_authorization_server']) {
-    if (md[t]?.organization_name) return md[t].organization_name;
+  const order = ['federation_entity','openid_provider','openid_relying_party','oauth_authorization_server'];
+  const ts = [...order, ...Object.keys(md).filter(t => !order.includes(t))];
+  for (const t of ts) {
+    for (const prop of ['display_name', 'organization_name']) {
+      if (md[t]?.[prop]) return md[t][prop];
+    }
   }
   return host(cfg?.sub || cfg?.iss || '');
 }
